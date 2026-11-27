@@ -69,6 +69,28 @@ DTRE_KEY="050f2457801615132e7455b622c8c8dfb65f09d4ff1eb86b5c0a1160678117c2"
 ROOTFS_DMG="058-24036-023.dmg"
 ROOTFS_KEY="21862ddcc49a861ffda17f7c6eca65355d2d1e762026cca60aabc726cd48b9e4cff214ff"
 MTPROPS=/usr/share/firmware/multitouch/P105.mtprops
+
+# BOARD=p107: iPad mini 1 Global (iPad2,7 / P107AP), the cellular sibling of
+# P105.  Same S5L8942, same iBoot-2261.30.37: the decrypted iBEC differs from
+# P105's in 80 bytes of board data only, none of them at the auto-go hook's
+# addresses, and the ADT differs only by the baseband/uart4/hsic-baseband
+# nodes (plus the phandles they shift).  Keys: Legacy-iOS-Kit-Keys, Donner
+# 12H321 (iPad2,7); its iPad2,5 entry matches the keys above.
+BOARD="${BOARD:-p105}"
+if [ "$BOARD" = p107 ]; then
+    IBSS_IV="fa39c596b6569e572d90f0820e4e4357"
+    IBSS_KEY="34b359fcc729a0f0d2853e786a78b245ed36a9212c8296aaab95dc0401cf07de"
+    IBEC_IV="6569eed96df512cc8e8807a50fe79270"
+    IBEC_KEY="23c2d76e12dbef7c2a107d8733b96dc79cbbb353bf649cdc7fea63c91904f623"
+    DTRE_IV="ade3c16e5919c6a820d631c95da3fae2"
+    DTRE_KEY="7faab4991cefdea2b460305e45c1557d4dddd072ddf492a8f756e5ece156f238"
+    ROOTFS_DMG="058-23932-023.dmg"
+    ROOTFS_KEY="0050f28d78a0d0414a7c4ba6bb6a5a42dc5ad0031233db4d54dc379763974827ed2c094a"
+    MTPROPS="${MTPROPS_P107:-/usr/share/firmware/multitouch/P107.mtprops}"
+    export KERNELCACHE=kernelcache.release.p107
+    export KC_IV=505d5717132faa13c35daac2d76d2d19
+    export KC_KEY=8c53d8a9c6358a7ae89a207bdd0e02538be3eccf6f32925ea81a61e9d28d4859
+fi
 WIFI_FW=/usr/share/firmware/wifi/4334b1/borg.trx
 # The NVRAM goes with the firmware, per module.  The chip names itself
 # "s=B3 M=HEIN m=2.6 V=t" (4334B3, TDK), and the iOS 8.4.1 Wi-Fi driver's own
@@ -127,10 +149,10 @@ mkdir -p "$OUT"
 build_one() {
     local name="$1" iv="$2" key="$3"
     echo "==> $name: extract, decrypt, patch"
-    unzip -o -j "$IPSW" "Firmware/dfu/${name}.p105.RELEASE.dfu" -d "$OUT" >/dev/null \
-        || fail "$name not found in $IPSW -- is this an iPad2,5 8.4.1 IPSW?"
+    unzip -o -j "$IPSW" "Firmware/dfu/${name}.${BOARD}.RELEASE.dfu" -d "$OUT" >/dev/null \
+        || fail "$name not found in $IPSW -- is this the 8.4.1 IPSW for BOARD=$BOARD?"
     python3 "$ROOT/scripts/img3decrypt.py" \
-        "$OUT/${name}.p105.RELEASE.dfu" "$OUT/${name}.dec" "$iv" "$key"
+        "$OUT/${name}.${BOARD}.RELEASE.dfu" "$OUT/${name}.dec" "$iv" "$key"
     "$PATCHER" "$OUT/${name}.dec" "$OUT/${name}.patched" -b "$BOOTARGS" >/dev/null
 }
 
@@ -144,21 +166,25 @@ build_one iBEC "$IBEC_IV" "$IBEC_KEY"
 echo "==> iBEC: auto-go hook"
 python3 "$ROOT/scripts/patch-ibec-autogo.py" "$OUT/iBEC.patched" "$OUT/iBEC.autogo"
 echo "==> iBEC: the PC-less image (boots from the NAND, docs/research/p105-pcless-boot.md)"
+if [ "$BOARD" = p105 ]; then
 python3 "$ROOT/scripts/patch-ibec-upgrade.py" "$OUT/iBEC.patched" "$OUT/iBEC.upgrade"
 # --stay: a boot that fails returns to iBEC's Recovery instead of rebooting --
 # what the app has started so far (./cascadia a5 install, disk=nand)
 python3 "$ROOT/scripts/patch-ibec-upgrade.py" --stay "$OUT/iBEC.patched" "$OUT/iBEC.upgrade.stay"
+else
+    echo "    skipped on BOARD=$BOARD: the PC-less patcher knows only P105's iBEC (RAM boot does not need it)"
+fi
 echo "==> DeviceTree: plaintext, iBEC cannot open a KBAG after kloader"
-unzip -o -j "$IPSW" "Firmware/all_flash/all_flash.p105ap.production/DeviceTree.p105ap.img3" -d "$OUT" >/dev/null \
+unzip -o -j "$IPSW" "Firmware/all_flash/all_flash.${BOARD}ap.production/DeviceTree.${BOARD}ap.img3" -d "$OUT" >/dev/null \
     || fail "DeviceTree not found in $IPSW"
-python3 "$ROOT/scripts/img3decrypt.py" "$OUT/DeviceTree.p105ap.img3" "$OUT/DeviceTree.dec" "$DTRE_IV" "$DTRE_KEY"
+python3 "$ROOT/scripts/img3decrypt.py" "$OUT/DeviceTree.${BOARD}ap.img3" "$OUT/DeviceTree.dec" "$DTRE_IV" "$DTRE_KEY"
 echo "==> iBEC: repack as img3 (encrypted -- the checkm8 route)"
 python3 "$ROOT/scripts/img3encrypt.py" \
-    "$OUT/iBEC.p105.RELEASE.dfu" "$OUT/iBEC.autogo" \
+    "$OUT/iBEC.${BOARD}.RELEASE.dfu" "$OUT/iBEC.autogo" \
     "$OUT/iBEC.patched.autogo.dfu" "$IBEC_IV" "$IBEC_KEY"
 echo "==> iBEC: repack as img3 (plaintext -- the kDFU route)"
 python3 "$ROOT/scripts/img3pack.py" \
-    "$OUT/iBEC.p105.RELEASE.dfu" "$OUT/iBEC.autogo" \
+    "$OUT/iBEC.${BOARD}.RELEASE.dfu" "$OUT/iBEC.autogo" \
     "$OUT/iBEC.patched.autogo.plain.dfu"
 
 echo "==> touch, Wi-Fi and Bluetooth firmware out of the root filesystem"
@@ -175,6 +201,18 @@ if [ "$BT_MODULE" = "Borg TDK" ]; then
         | sha256sum -c --quiet - || fail "BCM4334B0.hcd is not 12H321's Borg TDK patchram"
 fi
 
+if [ "$BOARD" != p105 ]; then
+    # The SGX543MP2 is the same part on every S5L8942 board, but the GPU driver
+    # uses offsets into the exact bytes of P105's kext and GL driver, and
+    # P107's kernelcache does not carry those bytes.  So the GPU files come
+    # from the P105 IPSW (GPU_FW_DIR, a P105 build/firmware made before).
+    GPU_FW_DIR="${GPU_FW_DIR:-$ROOT/build/firmware-p105}"
+    for f in sgx543.fw gl-event.pds kernelcache.12H321.macho; do
+        [ -s "$GPU_FW_DIR/$f" ] || fail "BOARD=$BOARD needs $GPU_FW_DIR/$f -- run ./cascadia a5 firmware with the iPad2,5 IPSW first and keep build/firmware as $GPU_FW_DIR"
+        cp "$GPU_FW_DIR/$f" "$OUT/$f"
+    done
+    echo "==> GPU: sgx543.fw, gl-event.pds from $GPU_FW_DIR (P105's 12H321)"
+else
 echo "==> GPU microkernel out of the kernelcache"
 python3 "$ROOT/scripts/extract-sgx-firmware.py" "$IPSW" "$OUT/sgx543.fw" \
     "$OUT/kernelcache.12H321.macho"
@@ -187,10 +225,12 @@ python3 "$ROOT/scripts/rootfs-extract.py" "$IPSW" "$ROOTFS_DMG" "$ROOTFS_KEY" \
     "/System/Library/Caches/com.apple.dyld/dyld_shared_cache_armv7@46ebd8+a8" "$OUT/gl-event.pds"
 echo "a1b855d41993968b40005e886f7ac11c8c3abb42aa0987e005eec4e6cb2a2285  $OUT/gl-event.pds" \
     | sha256sum -c --quiet - || fail "gl-event.pds is not the 12H321 GL driver's"
+fi
 
 echo
 rc=0
-for pair in "iBSS.patched:$KNOWN_IBSS_MD5" "iBEC.autogo:$KNOWN_IBEC_PLAIN_MD5" "P105.mtprops:$KNOWN_MTPROPS_MD5"; do
+[ "$BOARD" = p105 ] || { echo "    BOARD=$BOARD: no reference hashes for this board's iBSS/iBEC/mtprops"; KNOWN_IBSS_MD5=-; }
+[ "$BOARD" = p105 ] && for pair in "iBSS.patched:$KNOWN_IBSS_MD5" "iBEC.autogo:$KNOWN_IBEC_PLAIN_MD5" "P105.mtprops:$KNOWN_MTPROPS_MD5"; do
     f=${pair%%:*}; want=${pair##*:}; got=$(md5of "$OUT/$f")
     if [ "$got" = "$want" ]; then
         echo "    ok: $f reproduces the reference byte for byte"
