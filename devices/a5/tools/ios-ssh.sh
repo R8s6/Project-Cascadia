@@ -90,6 +90,6 @@ ios_check_model() {
         || fail "no ssh to iOS -- is the iPad in iOS, unlocked, with OpenSSH installed (Cydia)?"
     IOS_MODEL=$(ios uname -m) \
         || fail "no ssh to iOS -- is the iPad in iOS, unlocked, with OpenSSH installed (Cydia)?"
-    [ "$IOS_MODEL" = "iPad2,5" ] || fail "this is a $IOS_MODEL; this port is for iPad2,5 (p105ap)"
+    case "$IOS_MODEL" in iPad2,5|iPad2,7) ;; *) fail "this is a $IOS_MODEL; this port is for iPad2,5 (p105ap) and iPad2,7 (p107ap)" ;; esac
     echo "    $IOS_MODEL"
 }

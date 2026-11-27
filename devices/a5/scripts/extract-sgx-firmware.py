@@ -50,10 +50,11 @@ from Crypto.Cipher import AES
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
-KERNELCACHE = "kernelcache.release.p105"
+import os
+KERNELCACHE = os.environ.get("KERNELCACHE", "kernelcache.release.p105")
 # docs/kernelcache-keys.txt: the public key for iPad2,5 / 12H321.
-KC_IV = "ada137bf6aa705925d8ac5ada6025c11"
-KC_KEY = "0155c713f32ee5fb9f18187e0b87d19ef38b9e56af121821264163627f894b05"
+KC_IV = os.environ.get("KC_IV", "ada137bf6aa705925d8ac5ada6025c11")
+KC_KEY = os.environ.get("KC_KEY", "0155c713f32ee5fb9f18187e0b87d19ef38b9e56af121821264163627f894b05")
 
 BUILD = "12H321"
 DATA_SIZE = 0x16094

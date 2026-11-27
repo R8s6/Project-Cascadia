@@ -191,7 +191,7 @@ cmd_firmware() {
 
     say "IPSW: $IPSW_PATH"
     DOCKER_EXTRA=(-v "$IPSW_PATH":/ipsw.ipsw:ro)
-    in_docker "IPSW=/ipsw.ipsw bash scripts/build-firmware.sh"
+    in_docker "BOARD=${BOARD:-p105} IPSW=/ipsw.ipsw bash scripts/build-firmware.sh"
     DOCKER_EXTRA=()
 }
 
